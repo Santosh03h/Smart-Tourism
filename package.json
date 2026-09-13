@@ -1,0 +1,14 @@
+{
+  "name": "smart-tourism-platform",
+  "version": "1.0.0",
+  "description": "AI-Powered Smart Tourism & Safety Platform",
+  "scripts": {
+    "install-all": "npm install && npm --prefix server install && npm --prefix client install",
+    "server": "npm --prefix server run dev",
+    "client": "npm --prefix client run dev",
+    "seed": "npm --prefix server run seed"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
