@@ -1,6 +1,9 @@
 const Trip = require('../models/Trip');
+const mongoose = require('mongoose');
 const aiService = require('../services/aiService');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
+
+const isDemo = () => process.env.DEMO_MODE === 'true' || mongoose.connection.readyState !== 1;
 
 // In-memory demo trips store
 const demoTrips = {};
@@ -14,7 +17,7 @@ const getDemoTrips = (userId) => demoTrips[userId] || [
 // POST /api/trips
 exports.createTrip = asyncHandler(async (req, res) => {
   const tripData = { ...req.body, userId: req.user._id };
-  if (process.env.DEMO_MODE === 'true') {
+  if (isDemo()) {
     const newTrip = { _id: `trip_${Date.now()}`, ...tripData, status: 'planned', createdAt: new Date().toISOString(), isDemo: true };
     if (!demoTrips[req.user._id]) demoTrips[req.user._id] = [...getDemoTrips(req.user._id)];
     demoTrips[req.user._id].unshift(newTrip);
@@ -26,7 +29,7 @@ exports.createTrip = asyncHandler(async (req, res) => {
 
 // GET /api/trips
 exports.getTrips = asyncHandler(async (req, res) => {
-  if (process.env.DEMO_MODE === 'true') {
+  if (isDemo()) {
     return res.json({ success: true, trips: getDemoTrips(req.user._id), demoMode: true });
   }
   const trips = await Trip.find({ userId: req.user._id }).sort({ createdAt: -1 });
@@ -35,7 +38,7 @@ exports.getTrips = asyncHandler(async (req, res) => {
 
 // GET /api/trips/:id
 exports.getTrip = asyncHandler(async (req, res) => {
-  if (process.env.DEMO_MODE === 'true') {
+  if (isDemo()) {
     const trips = getDemoTrips(req.user._id);
     const trip = trips.find(t => t._id === req.params.id) || trips[0];
     return res.json({ success: true, trip, demoMode: true });
@@ -47,7 +50,7 @@ exports.getTrip = asyncHandler(async (req, res) => {
 
 // PUT /api/trips/:id
 exports.updateTrip = asyncHandler(async (req, res) => {
-  if (process.env.DEMO_MODE === 'true') {
+  if (isDemo()) {
     const trips = getDemoTrips(req.user._id);
     const idx = trips.findIndex(t => t._id === req.params.id);
     if (idx !== -1) trips[idx] = { ...trips[idx], ...req.body };
@@ -60,7 +63,7 @@ exports.updateTrip = asyncHandler(async (req, res) => {
 
 // DELETE /api/trips/:id
 exports.deleteTrip = asyncHandler(async (req, res) => {
-  if (process.env.DEMO_MODE === 'true') {
+  if (isDemo()) {
     return res.json({ success: true, message: 'Trip deleted (demo mode).', demoMode: true });
   }
   await Trip.findOneAndDelete({ _id: req.params.id, userId: req.user._id });

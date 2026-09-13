@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 
@@ -7,6 +8,8 @@ const signToken = (user) => jwt.sign(
   process.env.JWT_SECRET || 'SmartTourism2024SecretKey!',
   { expiresIn: process.env.JWT_EXPIRE || '7d' }
 );
+
+const isDemo = () => process.env.DEMO_MODE === 'true' || mongoose.connection.readyState !== 1;
 
 // Demo users for when DB is unavailable
 const DEMO_USERS = [
@@ -19,13 +22,34 @@ exports.register = asyncHandler(async (req, res) => {
   const { name, email, password, phone, emergencyContact, preferredLanguage, travelType } = req.body;
   if (!name || !email || !password) throw new AppError('Name, email, and password are required.', 400);
 
-  if (process.env.DEMO_MODE === 'true') {
-    // In demo mode — store user in memory for demo session
-    const demoUser = { _id: `user_${Date.now()}`, name, email: email.toLowerCase(), passwordPlain: password, phone, role: 'user', travelType: travelType || 'Solo', preferredLanguage: preferredLanguage || 'English', emergencyContact };
-    DEMO_USERS.push(demoUser);
+  if (isDemo()) {
+    const cleanEmail = email.toLowerCase().trim();
+    // Check if demo user already exists
+    let demoUser = DEMO_USERS.find(u => u.email === cleanEmail);
+    if (demoUser) {
+      demoUser.name = name;
+      demoUser.passwordPlain = password;
+      if (phone) demoUser.phone = phone;
+      if (emergencyContact) demoUser.emergencyContact = emergencyContact;
+      if (preferredLanguage) demoUser.preferredLanguage = preferredLanguage;
+      if (travelType) demoUser.travelType = travelType;
+    } else {
+      demoUser = {
+        _id: `user_${Date.now()}`,
+        name,
+        email: cleanEmail,
+        passwordPlain: password,
+        phone: phone || '',
+        role: 'user',
+        travelType: travelType || 'Solo',
+        preferredLanguage: preferredLanguage || 'English',
+        emergencyContact: emergencyContact || { name: '', phone: '', relation: '' }
+      };
+      DEMO_USERS.push(demoUser);
+    }
     const token = signToken(demoUser);
     const { passwordPlain, ...userOut } = demoUser;
-    return res.status(201).json({ success: true, token, user: userOut, demoMode: true, message: 'Demo account created.' });
+    return res.status(201).json({ success: true, token, user: userOut, demoMode: true, message: 'Account registered successfully.' });
   }
 
   const existing = await User.findOne({ email: email.toLowerCase() });
@@ -42,11 +66,11 @@ exports.login = asyncHandler(async (req, res) => {
   if (!email || !password) throw new AppError('Email and password are required.', 400);
 
   // Demo mode check
-  if (process.env.DEMO_MODE === 'true') {
+  if (isDemo()) {
     const cleanEmail = email.trim().toLowerCase();
     const demoUser = DEMO_USERS.find(u => u.email === cleanEmail);
     
-    // Support both Demo@123 and demo123 for demo user
+    // Support registered demo users, as well as default demo/admin credentials
     const isPasswordValid = demoUser && (
       demoUser.passwordPlain === password ||
       (cleanEmail === 'demo@tourism.com' && (password === 'Demo@123' || password === 'demo123')) ||
@@ -71,8 +95,8 @@ exports.login = asyncHandler(async (req, res) => {
 
 // GET /api/auth/me
 exports.getMe = asyncHandler(async (req, res) => {
-  if (process.env.DEMO_MODE === 'true') {
-    const demoUser = DEMO_USERS.find(u => u._id === req.user._id) || DEMO_USERS[0];
+  if (isDemo()) {
+    const demoUser = DEMO_USERS.find(u => u._id === req.user._id) || req.user || DEMO_USERS[0];
     const { passwordPlain, ...userOut } = demoUser;
     return res.json({ success: true, user: userOut, demoMode: true });
   }

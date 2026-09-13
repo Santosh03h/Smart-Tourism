@@ -39,15 +39,19 @@ const DEMO_ALERTS = [
   }
 ];
 
+const isConnected = () => require('mongoose').connection.readyState === 1 && process.env.DEMO_MODE !== 'true';
+
 // @desc    Get alerts
 // @route   GET /api/alerts
 const getAlerts = async (req, res) => {
   try {
     let alerts = [];
-    try {
-      alerts = await Alert.find({ $or: [{ userId: req.user._id }, { userId: null }] }).sort({ createdAt: -1 });
-    } catch (dbErr) {
-      // DB not connected — use demo
+    if (isConnected()) {
+      try {
+        alerts = await Alert.find({ $or: [{ userId: req.user?._id }, { userId: null }] }).sort({ createdAt: -1 });
+      } catch (dbErr) {
+        // DB error fallback
+      }
     }
 
     if (alerts.length === 0) {
@@ -59,7 +63,7 @@ const getAlerts = async (req, res) => {
       }));
     }
 
-    res.json({ success: true, count: alerts.length, alerts, isDemo: true });
+    res.json({ success: true, count: alerts.length, alerts, isDemo: !isConnected() });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to fetch alerts.' });
   }
@@ -69,8 +73,11 @@ const getAlerts = async (req, res) => {
 // @route   PUT /api/alerts/:id/read
 const markRead = async (req, res) => {
   try {
-    const alert = await Alert.findByIdAndUpdate(req.params.id, { read: true }, { new: true });
-    res.json({ success: true, message: 'Alert marked as read.', alert });
+    if (isConnected()) {
+      const alert = await Alert.findByIdAndUpdate(req.params.id, { read: true }, { new: true });
+      return res.json({ success: true, message: 'Alert marked as read.', alert });
+    }
+    res.json({ success: true, message: 'Alert marked as read (demo).' });
   } catch (err) {
     res.json({ success: true, message: 'Alert marked as read (demo).' });
   }

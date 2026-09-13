@@ -114,15 +114,23 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Database Connection ───────────────────────────────────────────────────────
+mongoose.set('bufferCommands', false);
 const PORT = process.env.PORT || 5000;
 
 const connectDB = async () => {
+  const uri = process.env.MONGO_URI;
+  if (!uri) {
+    console.log('⚠️  No MONGO_URI provided — Running in DEMO / IN-MEMORY MODE (all features available)');
+    process.env.DEMO_MODE = 'true';
+    return;
+  }
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/smart-tourism');
+    const conn = await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error('❌ MongoDB connection failed:', error.message);
-    console.log('⚠️  Running in DEMO MODE (no database required for frontend demo)');
+    console.log('⚠️  Falling back to DEMO / IN-MEMORY MODE (no database required)');
+    process.env.DEMO_MODE = 'true';
   }
 };
 
@@ -130,7 +138,7 @@ connectDB().then(() => {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌍 API: http://localhost:${PORT}/api/health`);
-    console.log(`🎭 Demo Mode: ${process.env.DEMO_MODE === 'true' ? 'ON' : 'OFF'}`);
+    console.log(`🎭 Demo Mode: ${process.env.DEMO_MODE === 'true' || mongoose.connection.readyState !== 1 ? 'ON' : 'OFF'}`);
   });
 });
 
