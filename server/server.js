@@ -9,9 +9,12 @@ require('dotenv').config();
 const app = express();
 
 // ─── Security Middleware ───────────────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: process.env.CLIENT_URL || '*',
   credentials: true
 }));
 
@@ -56,32 +59,48 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ─── Root Route ──────────────────────────────────────────────────────────────
-app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    name: 'AI-Powered Smart Tourism & Safety Platform API',
-    status: 'online',
-    healthCheck: '/api/health',
-    endpoints: {
-      auth: '/api/auth',
-      trips: '/api/trips',
-      ai: '/api/ai',
-      risk: '/api/risk',
-      routes: '/api/routes',
-      alerts: '/api/alerts',
-      emergency: '/api/emergency',
-      recommendations: '/api/recommendations',
-      weather: '/api/weather',
-      admin: '/api/admin'
-    }
-  });
-});
+// ─── Serve Frontend (Static React Build) ───────────────────────────────────────
+const path = require('path');
+const fs = require('fs');
+const clientDistPath = path.join(__dirname, '../client/dist');
 
-// ─── 404 Handler ───────────────────────────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });
-});
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res) => {
+    // If it's an unhandled API route, return 404 JSON instead of HTML
+    if (req.originalUrl.startsWith('/api/')) {
+      return res.status(404).json({ success: false, message: `API route ${req.originalUrl} not found` });
+    }
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+} else {
+  // ─── Root Route (when client is not built) ──────────────────────────────────
+  app.get('/', (req, res) => {
+    res.json({
+      success: true,
+      name: 'AI-Powered Smart Tourism & Safety Platform API',
+      status: 'online',
+      healthCheck: '/api/health',
+      endpoints: {
+        auth: '/api/auth',
+        trips: '/api/trips',
+        ai: '/api/ai',
+        risk: '/api/risk',
+        routes: '/api/routes',
+        alerts: '/api/alerts',
+        emergency: '/api/emergency',
+        recommendations: '/api/recommendations',
+        weather: '/api/weather',
+        admin: '/api/admin'
+      }
+    });
+  });
+
+  // ─── 404 Handler ─────────────────────────────────────────────────────────────
+  app.use((req, res) => {
+    res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });
+  });
+}
 
 // ─── Global Error Handler ──────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
